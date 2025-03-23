@@ -17,10 +17,8 @@ async def speak(text, filename="output.mp3"):
         tts = gTTS(text=text, lang='en')
         tts.save(filename)
         
-        # Play audio in background
         await asyncio.to_thread(playsound, filename)
         
-        # Cleanup
         try:
             os.remove(filename)
         except:
@@ -89,23 +87,16 @@ async def generate_quiz_from_chunk(llm, text_chunk, num_questions=1):
 async def get_voice_input():
     recognizer = sr.Recognizer()
     
-    # List available microphones
-    mics = sr.Microphone.list_microphone_names()
-    print("\nAvailable microphones:")
-    for i, mic in enumerate(mics):
-        print(f"{i}: {mic}")
-    
     try:
         with sr.Microphone(device_index=None) as source:  # None uses default microphone
             print("\n🎤 Adjusting for ambient noise... Please wait...")
             recognizer.adjust_for_ambient_noise(source, duration=1)
-            print(f"Source is {source}")
             print("🎤 Listening for answer... (Say A, B, C, or D)")
             
             # Adjust recognition settings for better accuracy
-            recognizer.energy_threshold = 4000  # Increase if in noisy environment
+            recognizer.energy_threshold = 1000  # Increase if in noisy environment
             recognizer.dynamic_energy_threshold = True
-            recognizer.pause_threshold = 0.8  # Shorter pause detection
+            recognizer.pause_threshold = 0.5  # Shorter pause detection
             
             try:
                 audio = recognizer.listen(source, timeout=5, phrase_time_limit=3)
