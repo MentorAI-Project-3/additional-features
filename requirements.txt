@@ -1,0 +1,9 @@
+gTTS==2.5.4
+ipython==8.12.3
+langchain==0.3.21
+langchain_groq==0.3.1
+mutagen==1.47.0
+pymupdf==1.25.4
+SpeechRecognition==3.14.1
+PyAudio==0.2.14
+playsound==1.2.2
