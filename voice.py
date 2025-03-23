@@ -1,28 +1,37 @@
-import sys
 import asyncio
 import pymupdf as fitz
 import json
-import speech_recognition as sr  # For voice input
-import threading  # For question timer
+import speech_recognition as sr 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
 from langchain.schema import HumanMessage
 from gtts import gTTS
-from IPython.display import Audio
 import os
 from mutagen.mp3 import MP3
-# to install thing in env use this:
-# .venv\Scripts\python.exe -m pip install "name of library"
+from playsound import playsound  # Add this import at the top
 
 # Initialize text-to-speech engine using gTTS (Async)
 async def speak(text, filename="output.mp3"):
-    tts = gTTS(text=text, lang='en')
-    tts.save(filename)
-    audio = MP3(filename)
-    duration = audio.info.length
-    os.system(f"start {filename}")  # Play the audio using the system's default player
-    await asyncio.sleep(duration)  # Non-blocking delay to allow the audio to play
-    return Audio(filename, autoplay=True)
+    try:
+        # Create speech file
+        tts = gTTS(text=text, lang='en')
+        tts.save(filename)
+        
+        # Play audio in background
+        await asyncio.to_thread(playsound, filename)
+        
+        # Cleanup
+        try:
+            os.remove(filename)
+        except:
+            pass
+
+    except Exception as e:
+        print(f"Speech synthesis error: {e}")
+        return None
+
+    return None
+
 
 # Load PDF and Extract All Text
 def load_pdf(pdf_path):
@@ -79,29 +88,52 @@ async def generate_quiz_from_chunk(llm, text_chunk, num_questions=1):
 # Function to get voice input (Async)
 async def get_voice_input():
     recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        print("🎤 Listening for answer... (Say A, B, C, or D)")
-        recognizer.adjust_for_ambient_noise(source)
-
-        try:
-            audio = recognizer.listen(source, timeout=5)  # 5-second timeout
-            text = recognizer.recognize_google(audio).strip().upper()
-            print(text)
-            text = text.split(' ')
-            if text[-1] in ["A", "B", "C", "D"]:
-                return text[-1]
-            else:
-                print("❌ Unrecognized answer. Please try again.")
+    
+    # List available microphones
+    mics = sr.Microphone.list_microphone_names()
+    print("\nAvailable microphones:")
+    for i, mic in enumerate(mics):
+        print(f"{i}: {mic}")
+    
+    try:
+        with sr.Microphone(device_index=None) as source:  # None uses default microphone
+            print("\n🎤 Adjusting for ambient noise... Please wait...")
+            recognizer.adjust_for_ambient_noise(source, duration=1)
+            print(f"Source is {source}")
+            print("🎤 Listening for answer... (Say A, B, C, or D)")
+            
+            # Adjust recognition settings for better accuracy
+            recognizer.energy_threshold = 4000  # Increase if in noisy environment
+            recognizer.dynamic_energy_threshold = True
+            recognizer.pause_threshold = 0.8  # Shorter pause detection
+            
+            try:
+                audio = recognizer.listen(source, timeout=5, phrase_time_limit=3)
+                print("Processing your speech...")
+                text = recognizer.recognize_google(audio).strip().upper()
+                print(f"Recognized: {text}")
+                
+                # Check for letter anywhere in the response
+                for word in text.split():
+                    if word in ["A", "B", "C", "D"]:
+                        return word
+                
+                print("❌ Unrecognized answer. Please say A, B, C, or D clearly.")
                 return await get_voice_input()
-        except sr.UnknownValueError:
-            print("❌ Could not understand audio. Please try again.")
-            return await get_voice_input()
-        except sr.RequestError:
-            print("❌ Speech Recognition service unavailable.")
-            return None
-        except Exception as e:
-            print(f"❌ Error: {e}")
-            return None
+                
+            except sr.WaitTimeoutError:
+                print("❌ No speech detected. Please try again.")
+                return await get_voice_input()
+            except sr.UnknownValueError:
+                print("❌ Could not understand audio. Please speak more clearly.")
+                return await get_voice_input()
+            except sr.RequestError as e:
+                print(f"❌ Speech Recognition service error: {e}")
+                return None
+                
+    except Exception as e:
+        print(f"❌ Microphone error: {e}")
+        return None
 
 # Function to get user input (keyboard or voice)
 async def get_user_input():
@@ -154,7 +186,7 @@ async def run_quiz(quiz_questions):
 
 # Main Execution Function
 async def main():
-    pdf_path = "C:\\Users\\Windows 11\\Desktop\\UN\\Project 3\\code\\project-3\\Information_Lecture_1[1].pdf"
+    pdf_path = "BERT.pdf"
     num_questions_per_chunk = 1  # Adjust as needed
 
     # Load and process the PDF
@@ -174,12 +206,12 @@ async def main():
 
     # Run the full quiz
     global voice_enable
-    print("Are you want a listening the Text or just Read it?\nEnter Yes, Y, No or N.")
+    print("Type V to read the questions outlout or R to read them\n")
     voice_enable = input().strip().upper()
-    while voice_enable not in ["Y", "YES", "N", "NO"]:
-            print("❌ Invalid input. Please enter Yes, Y, No or N.")
+    while voice_enable not in ["V","v", "R","r"]:
+            print("❌ Invalid input. Please enter V or R.")
             voice_enable = input().strip().upper()
-    if voice_enable in ["YES","Y"]:
+    if voice_enable in ["V", "v"]:
         voice_enable = True
     else:
         voice_enable = False
