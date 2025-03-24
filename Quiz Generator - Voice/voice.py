@@ -9,6 +9,9 @@ from gtts import gTTS
 import os
 from mutagen.mp3 import MP3
 from playsound import playsound  # Add this import at the top
+from dotenv import load_dotenv
+
+load_dotenv(".env")
 
 # Initialize text-to-speech engine using gTTS (Async)
 async def speak(text, filename="output.mp3"):
@@ -177,6 +180,7 @@ async def run_quiz(quiz_questions):
 
 # Main Execution Function
 async def main():
+    
     pdf_path = "BERT.pdf"
     num_questions_per_chunk = 1  # Adjust as needed
 
@@ -185,7 +189,7 @@ async def main():
     text_chunks = split_text(text, chunk_size=1000)  # Adjust chunk size as needed
 
     # Initialize LLM
-    llm = ChatGroq(model="llama3-70b-8192", temperature=0.4, api_key='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')
+    llm = ChatGroq(model="llama3-70b-8192", temperature=0.4)
 
     # Generate quiz questions for each chunk asynchronously
     all_questions = []

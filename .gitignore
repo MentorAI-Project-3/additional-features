@@ -1,2 +1,4 @@
 venv
 output.mp3
+.qodo
+.env
