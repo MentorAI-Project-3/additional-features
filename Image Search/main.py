@@ -4,11 +4,11 @@ from langchain_groq import ChatGroq
 from langchain.prompts import PromptTemplate
 import os
 
-GROQ_API_KEY = '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'
+GROQ_API_KEY = 'GROQ_API_KEY' # from https://console.groq.com/keys
 
 # Google Custom Search API (REQUIRED)
-GOOGLE_API_KEY = 'AIzaSyAU7xT2wdk9h81DQeYhz8jMNHi7pN4GRFI'
-GOOGLE_CSE_ID = "e6744a6420f96488a"  # Replace with your valid CSE ID
+GOOGLE_API_KEY = 'GOOGLE_API_KEY' # From https://console.cloud.google.com/apis/dashboard?inv=1&invt=Abs6FQ&project=liquid-folio-439508-i9
+GOOGLE_CSE_ID = "GOOGLE_SEARCH_ID"  # from https://programmablesearchengine.google.com/controlpanel/all
 
 
 # Function to search images using Google Custom Search
