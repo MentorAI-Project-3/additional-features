@@ -180,8 +180,7 @@ async def run_quiz(quiz_questions):
 
 # Main Execution Function
 async def main():
-    
-    pdf_path = "BERT.pdf"
+    pdf_path = "file_path"
     num_questions_per_chunk = 1  # Adjust as needed
 
     # Load and process the PDF
@@ -189,7 +188,7 @@ async def main():
     text_chunks = split_text(text, chunk_size=1000)  # Adjust chunk size as needed
 
     # Initialize LLM
-    llm = ChatGroq(model="llama3-70b-8192", temperature=0.4)
+    llm = ChatGroq(model="llama3-70b-8192", temperature=0.4, api_key='API Groq')
 
     # Generate quiz questions for each chunk asynchronously
     all_questions = []
