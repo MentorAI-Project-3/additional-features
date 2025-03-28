@@ -3,8 +3,10 @@ from langchain.chains import LLMChain
 from langchain_groq import ChatGroq
 from langchain.prompts import PromptTemplate
 import os
+from dotenv import load_dotenv
+load_dotenv("project-3\\API.env")
 
-GROQ_API_KEY = 'GROQ_API_KEY' # from https://console.groq.com/keys
+#GROQ_API_KEY = 'GROQ_API_KEY' # from https://console.groq.com/keys
 
 # Google Custom Search API (REQUIRED)
 GOOGLE_API_KEY = 'GOOGLE_API_KEY' # From https://console.cloud.google.com/apis/dashboard?inv=1&invt=Abs6FQ&project=liquid-folio-439508-i9
@@ -29,7 +31,7 @@ def search_images(query, max_results=3):
     return "\n".join(image_urls) if image_urls else "No relevant images found."
 
 # Initialize LangChain LLM
-llm = ChatGroq(model="llama3-8b-8192", temperature=0,api_key=GROQ_API_KEY)
+llm = ChatGroq(model="llama3-8b-8192", temperature=0)
 
 # Prompt for educational explanation
 prompt = PromptTemplate(
