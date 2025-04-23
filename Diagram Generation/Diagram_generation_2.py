@@ -1,9 +1,15 @@
-from graphviz import Digraph
 from langchain_groq import ChatGroq
-from langchain.schema import HumanMessage, AIMessage, SystemMessage
+from langchain.schema import HumanMessage, SystemMessage
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.document_loaders import TextLoader, PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
 import time
 import re
+import traceback
+import os
+import glob
 
 # Load environment variables from .env file
 load_dotenv("API.env")
@@ -14,24 +20,105 @@ def sanitize_filename(filename):
 # Initialize the LLM model
 llm = ChatGroq(model="llama3-70b-8192", temperature=0)
 
-# Input from user for the topic to explain
+# Initialize embeddings for RAG
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+# Function to load and process books
+def load_books(book_path="books"):
+    documents = []
+    print(f"📁 Checking for books at: {book_path}")
+    
+    # Check if book_path is a file or directory
+    if os.path.isfile(book_path):
+        files = [book_path]
+        print(f"📄 Found single file: {book_path}")
+    elif os.path.isdir(book_path):
+        files = glob.glob(os.path.join(book_path, "*.txt")) + glob.glob(os.path.join(book_path, "*.pdf"))
+        print(f"📂 Found {len(files)} files in directory: {files}")
+    else:
+        print(f"❌ Path '{book_path}' does not exist.")
+        return documents
+
+    for file in files:
+        try:
+            if file.endswith(".txt"):
+                print(f"📜 Loading text file: {file}")
+                loader = TextLoader(file)
+                documents.extend(loader.load())
+            elif file.endswith(".pdf"):
+                print(f"📕 Loading PDF file: {file}")
+                loader = PyPDFLoader(file)
+                documents.extend(loader.load())
+        except Exception as e:
+            print(f"⚠️ Error loading {file}: {str(e)}")
+    
+    if not documents:
+        print("⚠️ No documents loaded successfully.")
+        return documents
+    
+    # Split documents into chunks
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    chunks = text_splitter.split_documents(documents)
+    print(f"📑 Processed {len(chunks)} document chunks.")
+    return chunks
+
+# Create or load vector store
+def get_vector_store(book_path="books"):
+    if os.path.exists("faiss_index"):
+        print("🔍 Loading existing FAISS index.")
+        vector_store = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
+    else:
+        print("🛠️ Creating new FAISS index.")
+        chunks = load_books(book_path)
+        if not chunks:
+            print("⚠️ No books found. Proceeding without RAG context.")
+            return None
+        vector_store = FAISS.from_documents(chunks, embeddings)
+        vector_store.save_local("faiss_index")
+        print("💾 FAISS index saved.")
+    return vector_store
+
+# Retrieve relevant content for the topic
+def retrieve_context(topic, vector_store, k=4):
+    if vector_store is None:
+        return ""
+    docs = vector_store.similarity_search(topic, k=k)
+    context = "\n\n".join([doc.page_content for doc in docs])
+    print(f"🔎 Retrieved {len(docs)} relevant document chunks for topic: {topic}")
+    return context
+
+# Input from user for the book path and topic
+#book_path = input("Enter the path to your book (PDF or directory, default 'books'): ") or "books"
 topic = input("Enter what you want to learn: ")
 
-# First prompt: Explanation generation
+# Load vector store for RAG
+vector_store = get_vector_store("C:\\Users\\Windows 11\\Desktop\\UN\\Project 3\\code\\project-3/Diagram Generation\Hands-On Large Language Models Language Understanding and Generation (Jay Alammar) (Z-Library).pdf")
+
+# Retrieve relevant book content
+book_context = retrieve_context(topic, vector_store)
+
+# First prompt: Explanation generation with RAG context
 prompt_content = """
 You are an expert explainer working in a multi-agent system.
 
-Your job is to generate a clear, structured, and technically accurate description of a given topic so it can be turned into a diagram.
+Your job is to generate a clear, structured, and technically accurate description of a given topic so it can be turned into a diagram. Use the provided book content as the primary source of information to ensure the explanation is grounded in the reference material.
+
+**Book Content**:
+{book_context}
 
 Requirements:
-- Break down the topic into logical steps, layers, or components.
+- Break down the topic into logical steps, layers, or components based on the book content.
 - Describe each part in order of how it flows or interacts with others.
 - Focus on function, purpose, input/output, and relationships.
 - Keep the explanation concise but informative — not too short, not too long.
 - The description should be suitable for transforming into a technical diagram using Graphviz.
+- If the book content is insufficient, supplement with general knowledge but prioritize the book.
 
 Your output must be plain text, without code or special formatting.
 """
+
+# Format prompt with book context
+prompt_content = prompt_content.format(book_context=book_context if book_context else "No book content available.")
 
 # Get the structured description from the LLM
 content = llm.invoke([SystemMessage(content=prompt_content), HumanMessage(content=topic)])
@@ -275,27 +362,95 @@ g.render('modern_transformer_diagram', view=True)
 ```
 """
 
-#Get the Graphviz Python code from LLM
+# Prompt for fixing erroneous code
+prompt_fix_code = """
+You are an expert Python and Graphviz debugging assistant. Your task is to fix errors in a Python script that uses the Graphviz library to generate a diagram.
+
+You will receive:
+- The original Python code that failed.
+- The error message and traceback from the execution attempt.
+- The topic and description the code is trying to visualize.
+
+Your job is to:
+- Analyze the error message and traceback to identify the issue.
+- Fix the code to resolve the error while ensuring it still generates a valid Graphviz diagram for the given topic and description.
+- Ensure the fixed code adheres to the original requirements (e.g., uses `Digraph(format='png')`, `rankdir='TB'`, `dpi='300'`, includes notes, colors, etc.).
+- Only output the corrected Python code, without any explanations or markdown formatting.
+- If the error is unrelated to Graphviz (e.g., syntax error), fix it while preserving the diagram's structure.
+- If the error is due to missing imports, invalid node/edge definitions, or incorrect Graphviz syntax, correct those specifically.
+
+**Original Topic**: {topic}
+
+**Original Description**: {description}
+
+**Erroneous Code**:
+```python
+{erroneous_code}
+```
+
+**Error Message and Traceback**:
+```
+{error_message}
+```
+
+**Output**: Only the corrected Python code using the `graphviz` library.
+"""
+
+# Get the Graphviz Python code from LLM
 response = llm.invoke([SystemMessage(content=prompt_sys), HumanMessage(content=content.content)])
 
-#Extract and clean the generated code
+# Extract and clean the generated code
 response_text = response.content
-print("Generated Content:", content.content)
+graphviz_code = response_text.split('```')[1].strip('python\n') if '```' in response_text else response_text.strip()
 
-#Handle the code execution safely with isolated namespace
-for i in range(3):
-    try:
-        graphviz_code = response_text.split('```')[1].strip('python\n')
-        filename = f"diagram_{topic.replace(' ', '_')}_{int(time.time())}"
-        filename = sanitize_filename(filename)
+# Handle the code execution safely with isolated namespace
+filename = f"diagram_{topic.replace(' ', '_')}_{int(time.time())}"
+filename = sanitize_filename(filename)
 
-        # Safely execute the generated code in an isolated namespace
-        exec(graphviz_code)
-    except Exception as e:
-        print(f"❌ Error executing generated code: {e}")
+# First attempt to execute the code
+try:
+    exec(graphviz_code)
+    print(f"✅ Diagram generated successfully: {filename}.png")
+except Exception as e:
+    error_message = f"{str(e)}\n\n{traceback.format_exc()}"
+    print(f"❌ Initial attempt failed with error: {str(e)}")
 
-#Optionally, save the topic, description, and code to a text file for review
+    # Enter loop for error correction (up to 2 additional attempts)
+    for i in range(2):
+        # Prepare prompt to fix the code
+        fix_prompt = prompt_fix_code.format(
+            topic=topic,
+            description=content.content,
+            erroneous_code=graphviz_code,
+            error_message=error_message
+        )
+
+        # Get corrected code from LLM
+        fix_response = llm.invoke([SystemMessage(content=fix_prompt)])
+        fixed_code = fix_response.content
+
+        # Clean the fixed code
+        if '```' in fixed_code:
+            fixed_code = fixed_code.split('```')[1].strip('python\n')
+        else:
+            fixed_code = fixed_code.strip()
+
+        print(f"🛠️ Attempting to fix code for retry {i+1}/2")
+        graphviz_code = fixed_code  # Update code for next attempt
+
+        try:
+            exec(graphviz_code)
+            print(f"✅ Diagram generated successfully: {filename}.png")
+            break
+        except Exception as e:
+            error_message = f"{str(e)}\n\n{traceback.format_exc()}"
+            print(f"❌ Attempt {i+1}/2 failed with error: {str(e)}")
+            if i == 1:
+                print(f"❌ All attempts failed. Could not generate diagram.")
+
+# Optionally, save the topic, description, and code to a text file for review
 with open(f"{filename}.txt", "w", encoding="utf-8") as f: 
     f.write(f"## Topic: {topic}\n\n")
     f.write(f"### Description:\n{content.content}\n\n")
+    f.write(f"### Book Context:\n{book_context}\n\n")
     f.write(f"### Code:\n{graphviz_code}")
