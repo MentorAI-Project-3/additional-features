@@ -2,15 +2,12 @@ from langchain_groq import ChatGroq
 from langchain.schema import HumanMessage, SystemMessage
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.document_loaders import TextLoader, PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
 import time
 import re
 import traceback
 import os
-import glob
-
+from book_processing import create_vector_store
 # Load environment variables from .env file
 load_dotenv("API.env")
 
@@ -24,43 +21,6 @@ llm = ChatGroq(model="llama3-70b-8192", temperature=0)
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
 # Function to load and process books
-def load_books(book_path="books"):
-    documents = []
-    print(f"📁 Checking for books at: {book_path}")
-    
-    # Check if book_path is a file or directory
-    if os.path.isfile(book_path):
-        files = [book_path]
-        print(f"📄 Found single file: {book_path}")
-    elif os.path.isdir(book_path):
-        files = glob.glob(os.path.join(book_path, "*.txt")) + glob.glob(os.path.join(book_path, "*.pdf"))
-        print(f"📂 Found {len(files)} files in directory: {files}")
-    else:
-        print(f"❌ Path '{book_path}' does not exist.")
-        return documents
-
-    for file in files:
-        try:
-            if file.endswith(".txt"):
-                print(f"📜 Loading text file: {file}")
-                loader = TextLoader(file)
-                documents.extend(loader.load())
-            elif file.endswith(".pdf"):
-                print(f"📕 Loading PDF file: {file}")
-                loader = PyPDFLoader(file)
-                documents.extend(loader.load())
-        except Exception as e:
-            print(f"⚠️ Error loading {file}: {str(e)}")
-    
-    if not documents:
-        print("⚠️ No documents loaded successfully.")
-        return documents
-    
-    # Split documents into chunks
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    chunks = text_splitter.split_documents(documents)
-    print(f"📑 Processed {len(chunks)} document chunks.")
-    return chunks
 
 # Create or load vector store
 def get_vector_store(book_path="books"):
@@ -68,14 +28,7 @@ def get_vector_store(book_path="books"):
         print("🔍 Loading existing FAISS index.")
         vector_store = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
     else:
-        print("🛠️ Creating new FAISS index.")
-        chunks = load_books(book_path)
-        if not chunks:
-            print("⚠️ No books found. Proceeding without RAG context.")
-            return None
-        vector_store = FAISS.from_documents(chunks, embeddings)
-        vector_store.save_local("faiss_index")
-        print("💾 FAISS index saved.")
+        create_vector_store(book_path)
     return vector_store
 
 # Retrieve relevant content for the topic
