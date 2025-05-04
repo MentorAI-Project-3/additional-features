@@ -78,7 +78,7 @@ content = llm.invoke([SystemMessage(content=prompt_content), HumanMessage(conten
 
 # Second prompt: Code generation based on the description
 prompt_sys = """
-You are an expert technical diagram assistant. Your job is to generate annotated, educational diagrams using Python's Graphviz library.
+You are an expert technical diagram assistant. Your job is to generate annotated, educational diagrams using Python's Graphviz library, based on the description provided by the user.
 
 Your output should be a Python script that:
 - Use `Digraph(format='png')` and set `dpi='300'` for high-quality image generation.

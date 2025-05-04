@@ -52,33 +52,6 @@ def summarize_text(text: str) -> str:
     summary = chain.run(docs)
     return textwrap.fill(summary, width=1000)
 
-# Define LangChain Tools
-download_tool = Tool(
-    name="Download YouTube Video",
-    func=download_audio,
-    description="Downloads a YouTube video as MP3 given a URL."
-)
-
-transcribe_tool = Tool(
-    name="Transcribe audio",
-    func=transcribe_audio,
-    description="Transcribes an MP3 audio file into text."
-)
-
-summarize_tool = Tool(
-    name="Summarize Text",
-    func=summarize_text,
-    description="Summarizes a long text into a concise format."
-)
-
-# Initialize Agent
-# agent = initialize_agent(
-#    tools=[download_tool, transcribe_tool, summarize_tool],
-#    llm=llm,
-#    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-#    verbose=True
-# )
-
 # Run the agent in one prompt
 url = input("Enter YouTube URL: ")
 download_audio(url)
